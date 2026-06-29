@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
     --paper:#EFF3EC;
@@ -73,6 +74,20 @@
   }
   .av-a{background:var(--teal);}
   .av-d{background:var(--clay);}
+
+  .conn-dot{
+    display:inline-block;
+    width:7px;height:7px;border-radius:50%;
+    background:var(--ink-soft);
+    margin-right:5px;
+    vertical-align:middle;
+  }
+  .conn-dot.ok{background:var(--teal);}
+  .conn-dot.err{background:var(--clay);}
+  .conn-status{
+    font-size:11px;color:var(--ink-soft);
+    text-align:center;margin-bottom:1rem;
+  }
 
   .scale-card{
     background:var(--paper-raised);
@@ -215,6 +230,7 @@
     cursor:pointer;
   }
   .btn-add:active{transform:scale(0.99);}
+  .btn-add:disabled{opacity:.5;cursor:default;}
 
   .ledger{
     border:1px solid var(--line);
@@ -265,8 +281,8 @@
     border-radius:var(--radius);
     padding:1rem 1.25rem;
   }
-  .settle-row{display:flex;gap:8px;align-items:flex-end;}
-  .settle-row > div:first-child{flex:1;}
+  .settle-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}
+  .settle-row > div:first-child{flex:1;min-width:120px;}
   .btn-settle{
     background:var(--teal);
     color:#fff;
@@ -307,6 +323,11 @@
       <span><span class="avatar av-a">AG</span>Axel</span>
       <span><span class="avatar av-d">DY</span>Dylan</span>
     </div>
+  </div>
+
+  <div class="conn-status">
+    <span class="conn-dot" id="connDot"></span><span id="connText">Connexion…</span>
+    <button type="button" id="btnRefresh" style="margin-left:8px;background:none;border:none;color:var(--teal);font-size:11px;font-weight:600;cursor:pointer;text-decoration:underline;">Actualiser</button>
   </div>
 
   <div class="scale-card">
@@ -374,7 +395,7 @@
 
   <div class="section-title">Historique</div>
   <div class="ledger" id="ledger">
-    <div class="empty">Aucune dépense enregistrée pour l'instant.</div>
+    <div class="empty">Chargement…</div>
   </div>
 
   <div class="settle-card">
@@ -394,8 +415,12 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const STORAGE_KEY = 'coloc-vienne-axel-dylan-expenses';
-let state = { expenses: [] };
+const SUPABASE_URL = 'COLLE_TON_PROJECT_URL_ICI';
+const SUPABASE_ANON_KEY = 'COLLE_TA_CLE_ANON_ICI';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let rows = [];
 
 const catIcons = {
   loyer:'🏠', assurance:'🛡', energie:'⚡', internet:'📶',
@@ -407,7 +432,6 @@ const catLabels = {
 };
 
 let currentPayer = 'axel';
-
 document.getElementById('date').valueAsDate = new Date();
 
 document.getElementById('btnPayerA').addEventListener('click', () => setPayer('axel'));
@@ -434,13 +458,15 @@ function fmt(n){
 
 function computeBalance(){
   let balance = 0;
-  for(const e of state.expenses){
+  for(const e of rows){
     if(e.type === 'settlement'){
-      balance += e.signedAmount;
+      balance += Number(e.signed_amount);
       continue;
     }
-    const axelShare = e.amount * (e.splitAxel / 100);
-    const dylanShare = e.amount - axelShare;
+    const amount = Number(e.amount);
+    const splitAxel = e.split_axel ?? 50;
+    const axelShare = amount * (splitAxel / 100);
+    const dylanShare = amount - axelShare;
     if(e.payer === 'axel'){
       balance += dylanShare;
     } else {
@@ -450,7 +476,7 @@ function computeBalance(){
   return balance;
 }
 
-function render(){
+function renderBalance(){
   const balance = computeBalance();
   const label = document.getElementById('balanceLabel');
   const amount = document.getElementById('balanceAmount');
@@ -478,36 +504,43 @@ function render(){
     fill.style.left = '4px';
     fill.style.right = '50%';
   }
+}
 
+function renderLedger(){
   const ledger = document.getElementById('ledger');
-  if(state.expenses.length === 0){
+  if(rows.length === 0){
     ledger.innerHTML = '<div class="empty">Aucune dépense enregistrée pour l\'instant.</div>';
     return;
   }
-  const sorted = [...state.expenses].sort((a,b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id);
+  const sorted = [...rows].sort((a,b) => {
+    const da = a.expense_date || a.created_at || '';
+    const db = b.expense_date || b.created_at || '';
+    return db.localeCompare(da) || (b.id - a.id);
+  });
   ledger.innerHTML = sorted.map(e => {
     if(e.type === 'settlement'){
-      const dateStr = e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '';
+      const dateStr = e.expense_date ? new Date(e.expense_date).toLocaleDateString('fr-FR') : '';
       return `<div class="entry">
         <div class="cat">↻</div>
         <div class="meta">
           <div class="desc">${e.label}</div>
           <div class="sub">${dateStr} · remboursement</div>
         </div>
-        <div class="amt">${fmt(e.amount)}</div>
+        <div class="amt">${fmt(Number(e.amount))}</div>
         <button class="del" data-id="${e.id}" aria-label="Supprimer">✕</button>
       </div>`;
     }
-    const dateStr = e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '';
+    const dateStr = e.expense_date ? new Date(e.expense_date).toLocaleDateString('fr-FR') : '';
     const payerLabel = e.payer === 'axel' ? 'Axel' : 'Dylan';
-    const splitStr = e.splitAxel === 50 ? '50/50' : `Axel ${e.splitAxel}% · Dylan ${100-e.splitAxel}%`;
+    const splitAxel = e.split_axel ?? 50;
+    const splitStr = splitAxel === 50 ? '50/50' : `Axel ${splitAxel}% · Dylan ${100-splitAxel}%`;
     return `<div class="entry">
       <div class="cat">${catIcons[e.category] || '🧾'}</div>
       <div class="meta">
-        <div class="desc">${e.desc || catLabels[e.category]}</div>
+        <div class="desc">${e.description || catLabels[e.category] || 'Dépense'}</div>
         <div class="sub">${dateStr} · payé par ${payerLabel} · ${splitStr}</div>
       </div>
-      <div class="amt">${fmt(e.amount)}</div>
+      <div class="amt">${fmt(Number(e.amount))}</div>
       <button class="del" data-id="${e.id}" aria-label="Supprimer">✕</button>
     </div>`;
   }).join('');
@@ -517,25 +550,9 @@ function render(){
   });
 }
 
-async function save(){
-  try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(state), false);
-  }catch(err){
-    showToast('Erreur de sauvegarde');
-    console.error(err);
-  }
-}
-
-async function load(){
-  try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    if(res && res.value){
-      state = JSON.parse(res.value);
-    }
-  }catch(err){
-    state = { expenses: [] };
-  }
-  render();
+function renderAll(){
+  renderBalance();
+  renderLedger();
 }
 
 function showToast(msg){
@@ -545,41 +562,65 @@ function showToast(msg){
   setTimeout(() => t.classList.remove('show'), 1800);
 }
 
+function setConnStatus(ok, text){
+  document.getElementById('connDot').className = 'conn-dot ' + (ok === null ? '' : ok ? 'ok' : 'err');
+  document.getElementById('connText').textContent = text;
+}
+
+async function loadAll(){
+  setConnStatus(null, 'Connexion…');
+  const { data, error } = await sb.from('expenses').select('*').order('created_at', { ascending: false });
+  if(error){
+    setConnStatus(false, 'Connexion impossible — vérifie l\'URL et la clé Supabase');
+    console.error(error);
+    return;
+  }
+  rows = data;
+  setConnStatus(true, 'Synchronisé');
+  renderAll();
+}
+
 document.getElementById('btnAdd').addEventListener('click', async () => {
-  const desc = document.getElementById('desc').value.trim();
+  const description = document.getElementById('desc').value.trim();
   const amount = parseFloat(document.getElementById('amount').value);
   const category = document.getElementById('category').value;
-  const date = document.getElementById('date').value;
-  const splitAxel = parseInt(splitInput.value, 10);
+  const expense_date = document.getElementById('date').value;
+  const split_axel = parseInt(splitInput.value, 10);
 
   if(!amount || amount <= 0){
     showToast('Indique un montant valide');
     return;
   }
 
-  state.expenses.push({
-    id: Date.now(),
+  const { error } = await sb.from('expenses').insert({
     type: 'expense',
-    desc, amount, category, date,
+    description, amount, category, expense_date,
     payer: currentPayer,
-    splitAxel
+    split_axel
   });
+
+  if(error){
+    showToast('Erreur d\'enregistrement');
+    console.error(error);
+    return;
+  }
 
   document.getElementById('desc').value = '';
   document.getElementById('amount').value = '';
   splitInput.value = 50;
   updateSplitReadout();
-
-  await save();
-  render();
   showToast('Dépense ajoutée');
+  loadAll();
 });
 
 async function removeEntry(id){
-  state.expenses = state.expenses.filter(e => e.id !== id);
-  await save();
-  render();
+  const { error } = await sb.from('expenses').delete().eq('id', id);
+  if(error){
+    showToast('Erreur de suppression');
+    return;
+  }
   showToast('Supprimé');
+  loadAll();
 }
 
 document.getElementById('btnSettleDtoA').addEventListener('click', () => addSettlement('dylan-to-axel'));
@@ -592,25 +633,31 @@ async function addSettlement(direction){
     return;
   }
   const today = new Date().toISOString().slice(0,10);
-  const signedAmount = direction === 'dylan-to-axel' ? -amount : amount;
+  const signed_amount = direction === 'dylan-to-axel' ? -amount : amount;
   const label = direction === 'dylan-to-axel'
     ? 'Dylan a remboursé Axel'
     : 'Axel a remboursé Dylan';
 
-  state.expenses.push({
-    id: Date.now(),
+  const { error } = await sb.from('expenses').insert({
     type: 'settlement',
-    label, amount, signedAmount,
-    date: today
+    label, amount, signed_amount,
+    expense_date: today
   });
 
+  if(error){
+    showToast('Erreur d\'enregistrement');
+    console.error(error);
+    return;
+  }
+
   document.getElementById('settleAmount').value = '';
-  await save();
-  render();
   showToast('Remboursement enregistré');
+  loadAll();
 }
 
-load();
+document.getElementById('btnRefresh').addEventListener('click', loadAll);
+
+loadAll();
 </script>
 </body>
 </html>
