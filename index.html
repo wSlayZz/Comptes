@@ -159,7 +159,26 @@
   .cal-event{position:absolute;left:2px;right:2px;border-radius:5px;padding:2px 5px;font-size:10px;line-height:1.25;overflow:hidden;cursor:pointer;}
   .cal-event.axel{background:var(--teal-soft);color:var(--teal);}
   .cal-event.dylan{background:var(--clay-soft);color:var(--clay);}
-  .cal-event b{display:block;font-size:10px;}
+  .fact-grid{display:grid;gap:10px;margin-bottom:1.5rem;}
+  .fact-card{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);padding:1rem 1.25rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .fact-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+  .fact-icon.axel{background:var(--teal-soft);}
+  .fact-icon.dylan{background:var(--clay-soft);}
+  .fact-meta{flex:1;min-width:120px;}
+  .fact-name{font-size:14px;font-weight:600;}
+  .fact-sub{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .fact-iban{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+  .fact-iban.axel{background:var(--teal-soft);color:var(--teal);}
+  .fact-iban.dylan{background:var(--clay-soft);color:var(--clay);}
+  .fact-amt{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;text-align:right;}
+  .fact-total{background:var(--ink);color:var(--paper-raised);border-radius:var(--radius);padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;}
+  .fact-total-label{font-size:13px;opacity:.8;}
+  .fact-total-amounts{display:flex;gap:20px;align-items:center;}
+  .fact-total-person{text-align:center;}
+  .fact-total-person .name{font-size:11px;opacity:.7;margin-bottom:2px;}
+  .fact-total-person .amount{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;}
+  .fact-total-person .amount.axel{color:#7DCFB6;}
+  .fact-total-person .amount.dylan{color:#E8A98A;}
   .recur-toggle{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
   .recur-toggle button{flex:1;border:none;background:#fff;padding:8px 6px;font-family:'Inter',sans-serif;font-size:12px;cursor:pointer;color:var(--ink-soft);}
   .recur-toggle button.active{background:var(--gold-soft);color:var(--gold);font-weight:600;}
@@ -188,6 +207,7 @@
     <button class="tab-btn active" data-tab="comptes">Comptes</button>
     <button class="tab-btn" data-tab="taches">Tâches</button>
     <button class="tab-btn" data-tab="echeances">Échéances</button>
+    <button class="tab-btn" data-tab="factures">Factures</button>
     <button class="tab-btn" data-tab="planning">Planning</button>
   </div>
 
@@ -306,6 +326,56 @@
     </div>
   </div>
 
+  <div class="panel" id="panel-factures">
+    <div class="fact-total" id="factTotal">
+      <span class="fact-total-label">Total mensuel</span>
+      <div class="fact-total-amounts">
+        <div class="fact-total-person">
+          <div class="name">Axel</div>
+          <div class="amount axel" id="totalAxel">—</div>
+        </div>
+        <div class="fact-total-person">
+          <div class="name">Dylan</div>
+          <div class="amount dylan" id="totalDylan">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fact-grid" id="factGrid"><div class="empty" style="text-align:center;color:var(--ink-soft);padding:2rem;">Aucune facture enregistrée.</div></div>
+
+    <div class="section-title">Ajouter une facture</div>
+    <div class="form-card">
+      <div class="row">
+        <div><label for="factName">Nom</label><input id="factName" type="text" placeholder="ex. Netflix, Assurance, Engie..."></div>
+        <div style="max-width:120px;"><label for="factAmount">Montant/mois (€)</label><input id="factAmount" type="number" step="0.01" min="0" placeholder="0.00"></div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="factCategory">Catégorie</label>
+          <select id="factCategory">
+            <option value="loyer">Loyer</option>
+            <option value="assurance">Assurance</option>
+            <option value="energie">Électricité / gaz</option>
+            <option value="internet">Internet</option>
+            <option value="abonnement" selected>Abonnement</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div>
+          <label>Prélevé sur l'IBAN de</label>
+          <div class="payer-toggle">
+            <button type="button" id="btnFactA" class="active pa">Axel</button>
+            <button type="button" id="btnFactD" class="pd">Dylan</button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div><label for="factNote">Note (optionnel)</label><input id="factNote" type="text" placeholder="ex. Partagé 50/50, uniquement pour Axel..."></div>
+      </div>
+      <button class="btn-add" id="btnAddFact">Ajouter la facture</button>
+    </div>
+  </div>
+
   <div class="panel" id="panel-planning">
     <div class="cal-toolbar">
       <div class="person-toggle">
@@ -397,6 +467,7 @@ let expenses = [];
 let chores = [];
 let bills = [];
 let schedules = [];
+let factures = [];
 
 const catIcons = { loyer:'🏠', assurance:'🛡', energie:'⚡', internet:'📶', abonnement:'📺', courses:'🛒', autre:'🧾' };
 const catLabels = { loyer:'Loyer', assurance:'Assurance', energie:'Électricité / gaz', internet:'Internet', abonnement:'Abonnement', courses:'Courses', autre:'Autre' };
@@ -780,7 +851,66 @@ document.getElementById('btnAddSched').addEventListener('click', async () => {
 });
 
 document.getElementById('btnRefresh').addEventListener('click', loadAll);
-function loadAll(){ loadExpenses(); loadChores(); loadBills(); loadSchedules(); }
+let factIban = 'axel';
+document.getElementById('btnFactA').addEventListener('click', () => { factIban = 'axel'; document.getElementById('btnFactA').classList.add('active'); document.getElementById('btnFactD').classList.remove('active'); });
+document.getElementById('btnFactD').addEventListener('click', () => { factIban = 'dylan'; document.getElementById('btnFactD').classList.add('active'); document.getElementById('btnFactA').classList.remove('active'); });
+
+async function loadFactures(){
+  const { data, error } = await sb.from('factures').select('*').order('created_at', { ascending: true });
+  if(error){ console.error(error); return; }
+  factures = data; renderFactures();
+}
+
+function renderFactures(){
+  const grid = document.getElementById('factGrid');
+  let totalAxelAmt = 0, totalDylanAmt = 0;
+
+  for(const f of factures){
+    if(f.iban === 'axel') totalAxelAmt += Number(f.amount);
+    else totalDylanAmt += Number(f.amount);
+  }
+
+  document.getElementById('totalAxel').textContent = totalAxelAmt.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  document.getElementById('totalDylan').textContent = totalDylanAmt.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+
+  if(factures.length === 0){
+    grid.innerHTML = '<div class="empty" style="text-align:center;color:var(--ink-soft);padding:2rem;">Aucune facture enregistrée.</div>';
+    return;
+  }
+
+  grid.innerHTML = factures.map(f => `
+    <div class="fact-card">
+      <div class="fact-icon ${f.iban}">${catIcons[f.category] || '🧾'}</div>
+      <div class="fact-meta">
+        <div class="fact-name">${f.name}</div>
+        <div class="fact-sub">${catLabels[f.category] || 'Autre'}${f.note ? ' · ' + f.note : ''}</div>
+      </div>
+      <span class="fact-iban ${f.iban}">IBAN ${f.iban === 'axel' ? 'Axel' : 'Dylan'}</span>
+      <div class="fact-amt">${fmt(f.amount)}</div>
+      <button class="chore-del" data-id="${f.id}">✕</button>
+    </div>`).join('');
+
+  grid.querySelectorAll('.chore-del').forEach(btn => btn.addEventListener('click', async () => {
+    await sb.from('factures').delete().eq('id', btn.dataset.id);
+    loadFactures();
+    showToast('Supprimé');
+  }));
+}
+
+document.getElementById('btnAddFact').addEventListener('click', async () => {
+  const name = document.getElementById('factName').value.trim();
+  const amount = parseFloat(document.getElementById('factAmount').value);
+  const category = document.getElementById('factCategory').value;
+  const note = document.getElementById('factNote').value.trim();
+  if(!name || !amount || amount <= 0){ showToast('Vérifie le nom et le montant'); return; }
+  await sb.from('factures').insert({ name, amount, category, note, iban: factIban });
+  document.getElementById('factName').value = '';
+  document.getElementById('factAmount').value = '';
+  document.getElementById('factNote').value = '';
+  showToast('Facture ajoutée'); loadFactures();
+});
+
+function loadAll(){ loadExpenses(); loadChores(); loadBills(); loadFactures(); loadSchedules(); }
 loadAll();
 </script>
 </body>
