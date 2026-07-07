@@ -79,6 +79,8 @@
   .tirelire-person .tp-name{font-size:11px;font-weight:600;margin-bottom:2px;}
   .tirelire-person.axel .tp-name{color:var(--teal);}
   .tirelire-person.dylan .tp-name{color:var(--clay);}
+  .tirelire-person .tp-amt{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;}
+  .tirelire-person .tp-sub{font-size:10px;opacity:.65;margin-top:2px;}
   .tirelire-person .tp-reset{margin-top:6px;border:none;background:rgba(0,0,0,.08);border-radius:6px;padding:4px 8px;font-size:10px;font-weight:600;cursor:pointer;color:inherit;width:100%;}
   .tirelire-btns{display:flex;gap:10px;margin-bottom:.75rem;}
   .tirelire-btn{flex:1;border:none;border-radius:8px;padding:10px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;}
@@ -235,12 +237,14 @@
       <div class="tirelire-detail">
         <div class="tirelire-person axel">
           <div class="tp-name">Axel doit</div>
-          <div class="tp-amt" id="tirelireAxel">0,00 €</div>
+          <div class="tp-amt" id="tirelireAxelDoit">0,00 €</div>
+          <div class="tp-sub" id="tirelireAxelTotal"></div>
           <button class="tp-reset" id="btnResetAxel">J'ai payé ✓</button>
         </div>
         <div class="tirelire-person dylan">
           <div class="tp-name">Dylan doit</div>
-          <div class="tp-amt" id="tirelireDylan">0,00 €</div>
+          <div class="tp-amt" id="tirelireDylanDoit">0,00 €</div>
+          <div class="tp-sub" id="tirelireDylanTotal"></div>
           <button class="tp-reset" id="btnResetDylan">J'ai payé ✓</button>
         </div>
       </div>
@@ -570,20 +574,25 @@ async function loadTirelire(){
 
 function renderTirelire(data){
   const total = data.reduce((s, e) => s + Number(e.amount), 0);
+  const axelDoit = data.filter(e => e.person === 'axel' && !e.paid).reduce((s, e) => s + Number(e.amount), 0);
+  const dylanDoit = data.filter(e => e.person === 'dylan' && !e.paid).reduce((s, e) => s + Number(e.amount), 0);
   const axelTotal = data.filter(e => e.person === 'axel').reduce((s, e) => s + Number(e.amount), 0);
   const dylanTotal = data.filter(e => e.person === 'dylan').reduce((s, e) => s + Number(e.amount), 0);
 
   const fmtE = n => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
   document.getElementById('tirelireAmount').textContent = fmtE(total);
-  document.getElementById('tirelireAxel').textContent = fmtE(axelTotal);
-  document.getElementById('tirelireDylan').textContent = fmtE(dylanTotal);
+  document.getElementById('tirelireAxelDoit').textContent = fmtE(axelDoit);
+  document.getElementById('tirelireDylanDoit').textContent = fmtE(dylanDoit);
+  document.getElementById('tirelireAxelTotal').textContent = 'Total versé : ' + fmtE(axelTotal);
+  document.getElementById('tirelireDylanTotal').textContent = 'Total versé : ' + fmtE(dylanTotal);
 
   const log = document.getElementById('tirelireLog');
   if(data.length === 0){ log.innerHTML = ''; return; }
   log.innerHTML = data.slice(0, 5).map(e => {
     const dateStr = new Date(e.created_at).toLocaleDateString('fr-FR');
     const name = e.person === 'axel' ? 'Axel' : 'Dylan';
-    return `<span style="margin-right:10px;">${name} · +${Number(e.amount).toFixed(2)}€ · ${dateStr}</span>`;
+    const paidTag = e.paid ? ' ✓' : '';
+    return `<span style="margin-right:10px;">${name} · +${Number(e.amount).toFixed(2)}€ · ${dateStr}${paidTag}</span>`;
   }).join('<br>');
 }
 
@@ -601,14 +610,14 @@ document.getElementById('btnJarAxel').addEventListener('click', () => addSwear('
 document.getElementById('btnJarDylan').addEventListener('click', () => addSwear('dylan'));
 
 document.getElementById('btnResetAxel').addEventListener('click', async () => {
-  if(!confirm('Remettre le total d\'Axel à zéro ? (les entrées seront supprimées)')) return;
-  await sb.from('tirelire').delete().eq('person', 'axel');
+  if(!confirm('Axel a versé sa part dans la cagnotte ?')) return;
+  await sb.from('tirelire').update({ paid: true }).eq('person', 'axel').eq('paid', false);
   showToast('Axel est à jour 🎉');
   loadTirelire();
 });
 document.getElementById('btnResetDylan').addEventListener('click', async () => {
-  if(!confirm('Remettre le total de Dylan à zéro ? (les entrées seront supprimées)')) return;
-  await sb.from('tirelire').delete().eq('person', 'dylan');
+  if(!confirm('Dylan a versé sa part dans la cagnotte ?')) return;
+  await sb.from('tirelire').update({ paid: true }).eq('person', 'dylan').eq('paid', false);
   showToast('Dylan est à jour 🎉');
   loadTirelire();
 });
