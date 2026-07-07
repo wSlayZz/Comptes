@@ -72,6 +72,14 @@
   .tirelire-icon{font-size:36px;line-height:1;}
   .tirelire-label{font-size:12px;color:var(--ink-soft);margin-bottom:3px;}
   .tirelire-amount{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;color:var(--gold);}
+  .tirelire-detail{display:flex;gap:10px;margin-bottom:.75rem;}
+  .tirelire-person{flex:1;border-radius:8px;padding:8px 10px;text-align:center;}
+  .tirelire-person.axel{background:var(--teal-soft);}
+  .tirelire-person.dylan{background:var(--clay-soft);}
+  .tirelire-person .tp-name{font-size:11px;font-weight:600;margin-bottom:2px;}
+  .tirelire-person.axel .tp-name{color:var(--teal);}
+  .tirelire-person.dylan .tp-name{color:var(--clay);}
+  .tirelire-person .tp-amt{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;}
   .tirelire-btns{display:flex;gap:10px;margin-bottom:.75rem;}
   .tirelire-btn{flex:1;border:none;border-radius:8px;padding:10px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;}
   .tirelire-btn.pa{background:var(--teal-soft);color:var(--teal);}
@@ -222,6 +230,16 @@
         <div>
           <div class="tirelire-label">Cagnotte gros mots</div>
           <div class="tirelire-amount" id="tirelireAmount">0,00 €</div>
+        </div>
+      </div>
+      <div class="tirelire-detail">
+        <div class="tirelire-person axel">
+          <div class="tp-name">Axel doit</div>
+          <div class="tp-amt" id="tirelireAxel">0,00 €</div>
+        </div>
+        <div class="tirelire-person dylan">
+          <div class="tp-name">Dylan doit</div>
+          <div class="tp-amt" id="tirelireDylan">0,00 €</div>
         </div>
       </div>
       <div class="tirelire-btns">
@@ -542,48 +560,43 @@ function renderLedger(){
   ledger.querySelectorAll('.del').forEach(btn => btn.addEventListener('click', () => removeExpense(parseInt(btn.dataset.id, 10))));
 }
 
-let tirelireTotal = 0;
-let tirelireEntries = [];
-
 async function loadTirelire(){
-  try {
-    const res = await window.storage.get('tirelire-coloc', false);
-    if(res && res.value){
-      const saved = JSON.parse(res.value);
-      tirelireTotal = saved.total || 0;
-      tirelireEntries = saved.entries || [];
-    }
-  } catch(e){ tirelireTotal = 0; tirelireEntries = []; }
-  renderTirelire();
+  const { data, error } = await sb.from('tirelire').select('*').order('created_at', { ascending: false });
+  if(error){ console.error(error); return; }
+  renderTirelire(data);
 }
 
-function renderTirelire(){
-  document.getElementById('tirelireAmount').textContent =
-    tirelireTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+function renderTirelire(data){
+  const total = data.reduce((s, e) => s + Number(e.amount), 0);
+  const axelTotal = data.filter(e => e.person === 'axel').reduce((s, e) => s + Number(e.amount), 0);
+  const dylanTotal = data.filter(e => e.person === 'dylan').reduce((s, e) => s + Number(e.amount), 0);
+
+  const fmtE = n => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  document.getElementById('tirelireAmount').textContent = fmtE(total);
+  document.getElementById('tirelireAxel').textContent = fmtE(axelTotal);
+  document.getElementById('tirelireDylan').textContent = fmtE(dylanTotal);
+
   const log = document.getElementById('tirelireLog');
-  if(tirelireEntries.length === 0){ log.innerHTML = ''; return; }
-  log.innerHTML = tirelireEntries.slice(-5).reverse().map(e =>
-    `<span style="margin-right:10px;">${e.person} · +${e.amount.toFixed(2)}€ · ${e.date}</span>`
-  ).join('<br>');
-}
-
-async function saveTirelire(){
-  await window.storage.set('tirelire-coloc', JSON.stringify({ total: tirelireTotal, entries: tirelireEntries }), false);
+  if(data.length === 0){ log.innerHTML = ''; return; }
+  log.innerHTML = data.slice(0, 5).map(e => {
+    const dateStr = new Date(e.created_at).toLocaleDateString('fr-FR');
+    const name = e.person === 'axel' ? 'Axel' : 'Dylan';
+    return `<span style="margin-right:10px;">${name} · +${Number(e.amount).toFixed(2)}€ · ${dateStr}</span>`;
+  }).join('<br>');
 }
 
 async function addSwear(person){
   const amounts = [0.10, 0.20, 0.50, 1.00];
   const amount = amounts[Math.floor(Math.random() * amounts.length)];
-  tirelireTotal += amount;
-  tirelireEntries.push({ person, amount, date: new Date().toLocaleDateString('fr-FR') });
-  if(tirelireEntries.length > 50) tirelireEntries = tirelireEntries.slice(-50);
-  await saveTirelire();
-  renderTirelire();
-  showToast(`${person} paie ${amount.toFixed(2)}€ 🤬`);
+  const { error } = await sb.from('tirelire').insert({ person, amount });
+  if(error){ showToast('Erreur d\'enregistrement'); console.error(error); return; }
+  const name = person === 'axel' ? 'Axel' : 'Dylan';
+  showToast(`${name} paie ${amount.toFixed(2)}€ 🤬`);
+  loadTirelire();
 }
 
-document.getElementById('btnJarAxel').addEventListener('click', () => addSwear('Axel'));
-document.getElementById('btnJarDylan').addEventListener('click', () => addSwear('Dylan'));
+document.getElementById('btnJarAxel').addEventListener('click', () => addSwear('axel'));
+document.getElementById('btnJarDylan').addEventListener('click', () => addSwear('dylan'));
 
 async function loadExpenses(){
   const { data, error } = await sb.from('expenses').select('*').order('created_at', { ascending: false });
