@@ -79,7 +79,7 @@
   .tirelire-person .tp-name{font-size:11px;font-weight:600;margin-bottom:2px;}
   .tirelire-person.axel .tp-name{color:var(--teal);}
   .tirelire-person.dylan .tp-name{color:var(--clay);}
-  .tirelire-person .tp-amt{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;}
+  .tirelire-person .tp-reset{margin-top:6px;border:none;background:rgba(0,0,0,.08);border-radius:6px;padding:4px 8px;font-size:10px;font-weight:600;cursor:pointer;color:inherit;width:100%;}
   .tirelire-btns{display:flex;gap:10px;margin-bottom:.75rem;}
   .tirelire-btn{flex:1;border:none;border-radius:8px;padding:10px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;}
   .tirelire-btn.pa{background:var(--teal-soft);color:var(--teal);}
@@ -236,10 +236,12 @@
         <div class="tirelire-person axel">
           <div class="tp-name">Axel doit</div>
           <div class="tp-amt" id="tirelireAxel">0,00 €</div>
+          <button class="tp-reset" id="btnResetAxel">J'ai payé ✓</button>
         </div>
         <div class="tirelire-person dylan">
           <div class="tp-name">Dylan doit</div>
           <div class="tp-amt" id="tirelireDylan">0,00 €</div>
+          <button class="tp-reset" id="btnResetDylan">J'ai payé ✓</button>
         </div>
       </div>
       <div class="tirelire-btns">
@@ -597,6 +599,19 @@ async function addSwear(person){
 
 document.getElementById('btnJarAxel').addEventListener('click', () => addSwear('axel'));
 document.getElementById('btnJarDylan').addEventListener('click', () => addSwear('dylan'));
+
+document.getElementById('btnResetAxel').addEventListener('click', async () => {
+  if(!confirm('Remettre le total d\'Axel à zéro ? (les entrées seront supprimées)')) return;
+  await sb.from('tirelire').delete().eq('person', 'axel');
+  showToast('Axel est à jour 🎉');
+  loadTirelire();
+});
+document.getElementById('btnResetDylan').addEventListener('click', async () => {
+  if(!confirm('Remettre le total de Dylan à zéro ? (les entrées seront supprimées)')) return;
+  await sb.from('tirelire').delete().eq('person', 'dylan');
+  showToast('Dylan est à jour 🎉');
+  loadTirelire();
+});
 
 async function loadExpenses(){
   const { data, error } = await sb.from('expenses').select('*').order('created_at', { ascending: false });
